@@ -20,7 +20,7 @@ class PipelineMetrics:
 
 
 def _build_summary(metrics: PipelineMetrics) -> pd.DataFrame:
-    return pd.DataFrame(columns=["metric", "value"])
+    return pd.DataFrame()
 
 
 def run_canonical_stage(project_root: Path) -> int:

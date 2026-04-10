@@ -35,7 +35,14 @@ def export_workbook(
     output_path = output_dir / OUTPUT_FILE_NAME
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         dataset.to_excel(writer, sheet_name=SHEET_GVA_WSO, index=False)
-        fund_not_found.to_excel(writer, sheet_name=SHEET_FUND_NOT_FOUND, index=False)
-        summary.to_excel(writer, sheet_name=SHEET_SUMMARY, index=False)
+        if fund_not_found.empty and len(fund_not_found.columns) == 0:
+            fund_not_found.to_excel(writer, sheet_name=SHEET_FUND_NOT_FOUND, index=False, header=False)
+        else:
+            fund_not_found.to_excel(writer, sheet_name=SHEET_FUND_NOT_FOUND, index=False)
+
+        if summary.empty and len(summary.columns) == 0:
+            summary.to_excel(writer, sheet_name=SHEET_SUMMARY, index=False, header=False)
+        else:
+            summary.to_excel(writer, sheet_name=SHEET_SUMMARY, index=False)
 
     return ExportResult(output_path=output_path)
