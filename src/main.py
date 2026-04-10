@@ -4,46 +4,26 @@ import argparse
 import sys
 from pathlib import Path
 
-from canonical_stage import run_canonical_stage
-from ingestion_stage import run_ingestion_stage
+from pipeline_stage import run_pipeline_stage
 from schema_errors import SchemaError
-from schema_stage import run_schema_stage
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _parse_project_root() -> Path:
 	parser = argparse.ArgumentParser(description="GVA <-> WSO reconciliation pipeline")
-	parser.add_argument(
-		"--stage",
-		default="pipeline",
-		choices=["schema", "ingestion", "canonical", "pipeline"],
-		help="Pipeline stage to run",
-	)
 	parser.add_argument(
 		"--project-root",
 		default=str(Path(__file__).resolve().parents[1]),
 		help="Project root containing data/ and src/",
 	)
-	return parser
+	args = parser.parse_args()
+	return Path(args.project_root).resolve()
 
 
 def main() -> int:
-	parser = _build_parser()
-	args = parser.parse_args()
-
-	project_root = Path(args.project_root).resolve()
+	project_root = _parse_project_root()
 
 	try:
-		if args.stage == "schema":
-			return run_schema_stage(project_root)
-		if args.stage == "ingestion":
-			return run_ingestion_stage(project_root)
-		if args.stage in {"canonical", "pipeline"}:
-			return run_canonical_stage(project_root)
-		raise SchemaError(
-			code="MAIN_UNKNOWN_STAGE",
-			message=f"Unsupported stage: {args.stage}",
-			hint="Use --stage pipeline, canonical, schema or ingestion",
-		)
+		return run_pipeline_stage(project_root)
 	except SchemaError as exc:
 		print(str(exc), file=sys.stderr)
 		return 2

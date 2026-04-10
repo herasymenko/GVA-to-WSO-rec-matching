@@ -25,7 +25,7 @@ def _build_summary(metrics: PipelineMetrics) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def run_canonical_stage(project_root: Path) -> int:
+def run_pipeline_stage(project_root: Path) -> int:
     started = perf_counter()
 
     rec_files = discover_rec_files(project_root)
