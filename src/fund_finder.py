@@ -18,7 +18,7 @@ class FundFinderResult:
 
 
 def apply_fund_mapping(normalized: NormalizeResult, loaded: LoadedMappingInputs) -> FundFinderResult:
-    dataset = normalized.normalized_df.copy()
+    dataset = normalized.normalized_df.copy(deep=False)
 
     def build_mapping(mapping_df: pd.DataFrame, set_id_col: str, conflict_code: str) -> dict[str, str]:
         mapping = mapping_df[[set_id_col, loaded.mapping_fund_col]].copy()
@@ -56,7 +56,7 @@ def apply_fund_mapping(normalized: NormalizeResult, loaded: LoadedMappingInputs)
 
     missing_mask = dataset["tr_fund_name"].astype("string").str.strip().eq("")
     fund_not_found = dataset[missing_mask].copy()
-    dataset = dataset[~missing_mask].copy()
+    dataset = dataset[~missing_mask]
 
     return FundFinderResult(
         dataset=dataset,

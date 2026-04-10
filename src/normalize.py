@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import REFERENCE_SOURCE_FIELDS, REQUIRED_SOURCE_FIELDS, TR_COLUMNS
+from config import REFERENCE_SOURCE_FIELDS, TR_COLUMNS
 from loader import LoadedRecInputs
 from schema_errors import SchemaError
 from validators import (
@@ -32,16 +32,13 @@ def _build_ref_data(df: pd.DataFrame, resolved: dict[str, str], present_ref_sour
     if not present_ref_sources:
         return pd.Series([""] * len(df), index=df.index, dtype="string")
 
-    def join_row(row: pd.Series) -> str:
-        parts: list[str] = []
-        for source_name in present_ref_sources:
-            value = row[resolved[source_name]]
-            cleaned = clean_ref_text(value)
-            if cleaned:
-                parts.append(cleaned)
-        return " | ".join(parts)
-
-    return df.apply(join_row, axis=1)
+    result = pd.Series("", index=df.index, dtype="string")
+    for source_name in present_ref_sources:
+        cleaned = df[resolved[source_name]].map(clean_ref_text).astype("string")
+        has_text = cleaned.str.len().gt(0)
+        appended = cleaned.where(result.eq(""), result + " | " + cleaned)
+        result = result.where(~has_text, appended)
+    return result
 
 
 def normalize_inputs(loaded: LoadedRecInputs, rec_paths: list[Path]) -> NormalizeResult:
@@ -52,7 +49,7 @@ def normalize_inputs(loaded: LoadedRecInputs, rec_paths: list[Path]) -> Normaliz
 
     for i, source_df in enumerate(loaded.rec_frames):
         file_path = rec_paths[i]
-        df = source_df.copy()
+        df = source_df
         source_columns = [str(c) for c in df.columns]
         resolved = resolve_columns(source_columns, alias_index)
         ensure_required_columns(resolved, file_path, "NORMALIZE")
@@ -74,7 +71,7 @@ def normalize_inputs(loaded: LoadedRecInputs, rec_paths: list[Path]) -> Normaliz
 
         present_ref_sources = [name for name in REFERENCE_SOURCE_FIELDS if name in resolved]
 
-        prepared = df.copy()
+        prepared = df.copy(deep=False)
         prepared["tr_rec_name"] = rec_type
         prepared["tr_ref_data"] = _build_ref_data(df, resolved, present_ref_sources)
         prepared["tr_found"] = False

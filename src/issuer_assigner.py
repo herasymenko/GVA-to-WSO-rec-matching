@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import pandas as pd
 
-from loader import LoadedInputs
+
+class HasIssuerColumns(Protocol):
+    key_issuer_col: str
+    key_value_col: str
 
 
 @dataclass
@@ -13,7 +17,7 @@ class IssuerAssignResult:
     issuer_assigned_count: int
 
 
-def assign_issuers(dataset: pd.DataFrame, key_values_df: pd.DataFrame, loaded: LoadedInputs) -> IssuerAssignResult:
+def assign_issuers(dataset: pd.DataFrame, key_values_df: pd.DataFrame, loaded: HasIssuerColumns) -> IssuerAssignResult:
     result = dataset.copy()
     issuer_col = loaded.key_issuer_col
     key_col = loaded.key_value_col

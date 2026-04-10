@@ -18,39 +18,56 @@ class PipelineMetrics:
     rows_gva: int
     rows_wso: int
     fund_not_found_rows: int
+    load_ms: int
+    normalize_ms: int
+    mapping_ms: int
+    export_ms: int
     elapsed_ms: int
 
 
-def _build_summary(metrics: PipelineMetrics) -> pd.DataFrame:
+def _build_summary() -> pd.DataFrame:
     return pd.DataFrame()
 
 
 def run_pipeline_stage(project_root: Path) -> int:
     started = perf_counter()
 
+    t0 = perf_counter()
     rec_files = discover_rec_files(project_root)
     mapping_file = discover_mapping_file(project_root)
     loaded = load_rec_datasets(rec_files)
     mapping_loaded = load_mapping_dataset(mapping_file)
+    load_ms = int((perf_counter() - t0) * 1000)
 
+    t1 = perf_counter()
     normalized = normalize_inputs(loaded, rec_files)
+    normalize_ms = int((perf_counter() - t1) * 1000)
+
+    t2 = perf_counter()
     funded = apply_fund_mapping(normalized, mapping_loaded)
+    mapping_ms = int((perf_counter() - t2) * 1000)
+
+    summary_sheet = _build_summary()
+
+    t3 = perf_counter()
+    exported = export_workbook(
+        project_root=project_root,
+        dataset=funded.dataset,
+        fund_not_found=funded.fund_not_found,
+        summary=summary_sheet,
+    )
+    export_ms = int((perf_counter() - t3) * 1000)
 
     metrics = PipelineMetrics(
         rows_total=len(funded.dataset),
         rows_gva=int((funded.dataset["tr_rec_name"] == "GVA").sum()),
         rows_wso=int((funded.dataset["tr_rec_name"] == "WSO").sum()),
         fund_not_found_rows=len(funded.fund_not_found),
+        load_ms=load_ms,
+        normalize_ms=normalize_ms,
+        mapping_ms=mapping_ms,
+        export_ms=export_ms,
         elapsed_ms=int((perf_counter() - started) * 1000),
-    )
-
-    summary_sheet = _build_summary(metrics)
-
-    exported = export_workbook(
-        project_root=project_root,
-        dataset=funded.dataset,
-        fund_not_found=funded.fund_not_found,
-        summary=summary_sheet,
     )
 
     print("[pipeline] status=ok")
@@ -58,6 +75,11 @@ def run_pipeline_stage(project_root: Path) -> int:
         "[pipeline] "
         f"rows_total={metrics.rows_total} rows_gva={metrics.rows_gva} rows_wso={metrics.rows_wso} "
         f"fund_not_found_rows={metrics.fund_not_found_rows} elapsed_ms={metrics.elapsed_ms}"
+    )
+    print(
+        "[pipeline] "
+        f"load_ms={metrics.load_ms} normalize_ms={metrics.normalize_ms} "
+        f"mapping_ms={metrics.mapping_ms} export_ms={metrics.export_ms}"
     )
     print(f"[pipeline] output_file={exported.output_path.name}")
     return 0
