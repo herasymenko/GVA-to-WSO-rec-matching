@@ -14,8 +14,8 @@ def _build_parser() -> argparse.ArgumentParser:
 	parser = argparse.ArgumentParser(description="GVA <-> WSO reconciliation pipeline")
 	parser.add_argument(
 		"--stage",
-		default="schema",
-		choices=["schema", "ingestion", "canonical"],
+		default="pipeline",
+		choices=["schema", "ingestion", "canonical", "pipeline"],
 		help="Pipeline stage to run",
 	)
 	parser.add_argument(
@@ -37,12 +37,12 @@ def main() -> int:
 			return run_schema_stage(project_root)
 		if args.stage == "ingestion":
 			return run_ingestion_stage(project_root)
-		if args.stage == "canonical":
+		if args.stage in {"canonical", "pipeline"}:
 			return run_canonical_stage(project_root)
 		raise SchemaError(
 			code="MAIN_UNKNOWN_STAGE",
 			message=f"Unsupported stage: {args.stage}",
-			hint="Use --stage schema, --stage ingestion or --stage canonical",
+			hint="Use --stage pipeline, canonical, schema or ingestion",
 		)
 	except SchemaError as exc:
 		print(str(exc), file=sys.stderr)
