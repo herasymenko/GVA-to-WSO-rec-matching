@@ -76,5 +76,9 @@ SHEET_SUMMARY = "gva_wso_summary"
 
 MAPPING_SET_ID_COL_CANDIDATES = ["Set ID WSO", "Set ID", "set_id_wso"]
 MAPPING_FUND_COL_CANDIDATES = ["Fund Name", "fund_name", "Fund"]
+MAPPING_WSO_SHEET_NAME = "WSO"
+MAPPING_GVA_SHEET_NAME = "GVA"
+MAPPING_WSO_SET_ID_COL_CANDIDATES = ["Set ID WSO", "Set ID", "set_id_wso"]
+MAPPING_GVA_SET_ID_COL_CANDIDATES = ["Set ID GVA", "Set ID", "set_id_gva"]
 KEY_VALUES_ISSUER_COL_CANDIDATES = ["issuer_name", "Issuer", "issuer"]
 KEY_VALUES_KEY_COL_CANDIDATES = ["key", "issuer_key", "Key"]
