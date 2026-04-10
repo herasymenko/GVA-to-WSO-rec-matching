@@ -35,6 +35,12 @@ class LoadedInputs:
     key_value_col: str
 
 
+@dataclass
+class LoadedRecInputs:
+    rec_frames: list[pd.DataFrame]
+    rec_file_names: list[str]
+
+
 def _xlsx_files(folder: Path) -> list[Path]:
     return sorted(p for p in folder.glob("*.xlsx") if p.is_file())
 
@@ -115,6 +121,25 @@ def discover_files(project_root: Path) -> InputFiles:
     )
 
 
+def discover_rec_files(project_root: Path) -> list[Path]:
+    input_dir = project_root / "data" / "input"
+    if not input_dir.exists():
+        raise SchemaError(
+            code="LOADER_INPUT_DIR_MISSING",
+            message=f"Input directory does not exist: {input_dir}",
+            hint="Create data/input and place rec xlsx files there.",
+        )
+
+    rec_files = _xlsx_files(input_dir)
+    if len(rec_files) != 2:
+        raise SchemaError(
+            code="LOADER_REC_FILE_COUNT",
+            message=f"Expected exactly 2 rec files in data/input, found {len(rec_files)}",
+            hint="Keep only two rec xlsx files in data/input.",
+        )
+    return rec_files
+
+
 def _pick_column(columns: list[str], candidates: list[str], code: str, kind: str) -> str:
     lower_map = {c.casefold(): c for c in columns}
     for candidate in candidates:
@@ -167,4 +192,11 @@ def load_datasets(files: InputFiles) -> LoadedInputs:
         mapping_fund_col=mapping_fund_col,
         key_issuer_col=key_issuer_col,
         key_value_col=key_value_col,
+    )
+
+
+def load_rec_datasets(rec_files: list[Path]) -> LoadedRecInputs:
+    return LoadedRecInputs(
+        rec_frames=[pd.read_excel(path, skiprows=1) for path in rec_files],
+        rec_file_names=[path.name for path in rec_files],
     )

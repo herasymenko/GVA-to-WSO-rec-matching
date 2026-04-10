@@ -111,7 +111,26 @@ def canonical_entry_type(value: object) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    return text.upper()
+    return text[:3].upper()
+
+
+def canonical_item_id(value: object) -> int | str | None:
+    if pd.isna(value):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith(".0"):
+        integer_part = text[:-2]
+        if integer_part.isdigit() or (integer_part.startswith("-") and integer_part[1:].isdigit()):
+            return int(integer_part)
+    if text.isdigit() or (text.startswith("-") and text[1:].isdigit()):
+        return int(text)
+    return text
 
 
 def clean_ref_text(value: object) -> str:

@@ -70,8 +70,8 @@ SIDE_MAP = {
 }
 
 OUTPUT_FILE_NAME = "gva_wso_matches_uniquenumber.xlsx"
-SHEET_MATCHES = "matches"
-SHEET_FUND_NOT_FOUND = "fund not found"
+SHEET_GVA_WSO = "gva_wso"
+SHEET_FUND_NOT_FOUND = "fund_not_found"
 SHEET_SUMMARY = "gva_wso_summary"
 
 MAPPING_SET_ID_COL_CANDIDATES = ["Set ID WSO", "Set ID", "set_id_wso"]

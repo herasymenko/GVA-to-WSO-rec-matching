@@ -6,7 +6,7 @@ import shutil
 
 import pandas as pd
 
-from config import OUTPUT_FILE_NAME, SHEET_FUND_NOT_FOUND, SHEET_MATCHES, SHEET_SUMMARY
+from config import OUTPUT_FILE_NAME, SHEET_FUND_NOT_FOUND, SHEET_GVA_WSO, SHEET_SUMMARY
 
 
 @dataclass
@@ -27,7 +27,6 @@ def export_workbook(
     project_root: Path,
     dataset: pd.DataFrame,
     fund_not_found: pd.DataFrame,
-    matches: pd.DataFrame,
     summary: pd.DataFrame,
 ) -> ExportResult:
     output_dir = project_root / "data" / "output"
@@ -35,7 +34,7 @@ def export_workbook(
 
     output_path = output_dir / OUTPUT_FILE_NAME
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        matches.to_excel(writer, sheet_name=SHEET_MATCHES, index=False)
+        dataset.to_excel(writer, sheet_name=SHEET_GVA_WSO, index=False)
         fund_not_found.to_excel(writer, sheet_name=SHEET_FUND_NOT_FOUND, index=False)
         summary.to_excel(writer, sheet_name=SHEET_SUMMARY, index=False)
 

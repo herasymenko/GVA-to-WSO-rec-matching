@@ -6,11 +6,12 @@ from pathlib import Path
 import pandas as pd
 
 from config import REFERENCE_SOURCE_FIELDS, REQUIRED_SOURCE_FIELDS, TR_COLUMNS
-from loader import LoadedInputs
+from loader import LoadedRecInputs
 from schema_errors import SchemaError
 from validators import (
     build_alias_index,
     canonical_entry_type,
+    canonical_item_id,
     canonical_side,
     clean_ref_text,
     detect_rec_type,
@@ -23,8 +24,6 @@ from validators import (
 @dataclass
 class NormalizeResult:
     normalized_df: pd.DataFrame
-    key_values_df: pd.DataFrame
-    mapping_df: pd.DataFrame
     rows_gva: int
     rows_wso: int
 
@@ -45,7 +44,7 @@ def _build_ref_data(df: pd.DataFrame, resolved: dict[str, str], present_ref_sour
     return df.apply(join_row, axis=1)
 
 
-def normalize_inputs(loaded: LoadedInputs, rec_paths: list[Path]) -> NormalizeResult:
+def normalize_inputs(loaded: LoadedRecInputs, rec_paths: list[Path]) -> NormalizeResult:
     alias_index = build_alias_index()
 
     prepared_frames: list[pd.DataFrame] = []
@@ -58,13 +57,24 @@ def normalize_inputs(loaded: LoadedInputs, rec_paths: list[Path]) -> NormalizeRe
         resolved = resolve_columns(source_columns, alias_index)
         ensure_required_columns(resolved, file_path, "NORMALIZE")
 
+        rename_map = {
+            source_name: canonical_name
+            for canonical_name, source_name in resolved.items()
+            if source_name != canonical_name and canonical_name not in df.columns
+        }
+        if rename_map:
+            df = df.rename(columns=rename_map)
+            resolved = {
+                canonical_name: rename_map.get(source_name, source_name)
+                for canonical_name, source_name in resolved.items()
+            }
+
         rec_type = detect_rec_type(df, resolved["Set ID"], file_path, "NORMALIZE")
         roles.append(rec_type)
 
         present_ref_sources = [name for name in REFERENCE_SOURCE_FIELDS if name in resolved]
 
         prepared = df.copy()
-        prepared["source_file"] = file_path.name
         prepared["tr_rec_name"] = rec_type
         prepared["tr_ref_data"] = _build_ref_data(df, resolved, present_ref_sources)
         prepared["tr_found"] = False
@@ -97,7 +107,7 @@ def normalize_inputs(loaded: LoadedInputs, rec_paths: list[Path]) -> NormalizeRe
             )
         prepared["tr_value_date"] = parsed_dates.dt.strftime("%Y-%m-%d")
 
-        prepared["tr_item_id"] = df[resolved["item id"]].astype("string").str.strip()
+        prepared["tr_item_id"] = df[resolved["item id"]].apply(canonical_item_id)
         prepared_frames.append(prepared)
 
     if sorted(roles) != ["GVA", "WSO"]:
@@ -113,17 +123,11 @@ def normalize_inputs(loaded: LoadedInputs, rec_paths: list[Path]) -> NormalizeRe
     ]
     merged = merged[output_columns]
 
-    key_values = loaded.key_values_df.copy()
-    key_values[loaded.key_issuer_col] = key_values[loaded.key_issuer_col].astype("string").str.casefold().str.strip()
-    key_values[loaded.key_value_col] = key_values[loaded.key_value_col].astype("string").str.casefold().str.strip()
-
     rows_gva = int((merged["tr_rec_name"] == "GVA").sum())
     rows_wso = int((merged["tr_rec_name"] == "WSO").sum())
 
     return NormalizeResult(
         normalized_df=merged,
-        key_values_df=key_values,
-        mapping_df=loaded.mapping_df.copy(),
         rows_gva=rows_gva,
         rows_wso=rows_wso,
     )
