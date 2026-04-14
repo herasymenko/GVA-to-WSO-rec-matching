@@ -6,6 +6,8 @@ from pathlib import Path
 import pandas as pd
 
 from config import (
+    KEY_VALUES_ISSUER_COL_CANDIDATES,
+    KEY_VALUES_KEY_COL_CANDIDATES,
     MAPPING_FUND_COL_CANDIDATES,
     MAPPING_GVA_SET_ID_COL_CANDIDATES,
     MAPPING_GVA_SHEET_NAME,
@@ -28,6 +30,13 @@ class LoadedMappingInputs:
     gva_mapping_df: pd.DataFrame
     gva_mapping_set_id_col: str
     mapping_fund_col: str
+
+
+@dataclass
+class LoadedKeyValuesInputs:
+    key_values_df: pd.DataFrame
+    key_issuer_col: str
+    key_value_col: str
 
 
 def _xlsx_files(folder: Path) -> list[Path]:
@@ -88,6 +97,31 @@ def discover_mapping_file(project_root: Path) -> Path:
         )
 
     return _find_single_by_tokens(static_files, ("mapping",), "LOADER_MAPPING_NOT_FOUND", "mapping")
+
+
+def discover_key_values_file(project_root: Path) -> Path:
+    static_dir = project_root / "data" / "static"
+    if not static_dir.exists():
+        raise SchemaError(
+            code="LOADER_STATIC_DIR_MISSING",
+            message=f"Static directory does not exist: {static_dir}",
+            hint="Create data/static and place key-values xlsx file there.",
+        )
+
+    static_files = _xlsx_files(static_dir)
+    if not static_files:
+        raise SchemaError(
+            code="LOADER_NO_STATIC_FILES",
+            message="No .xlsx files found in data/static",
+            hint="Add key-values xlsx file.",
+        )
+
+    return _find_single_by_tokens(
+        static_files,
+        ("key_values", "key-values", "keys", "key"),
+        "LOADER_KEY_VALUES_NOT_FOUND",
+        "key-values",
+    )
 
 
 def _pick_column(columns: list[str], candidates: list[str], code: str, kind: str) -> str:
@@ -162,4 +196,28 @@ def load_mapping_dataset(mapping_file: Path) -> LoadedMappingInputs:
         gva_mapping_df=gva_mapping_df,
         gva_mapping_set_id_col=gva_mapping_set_id_col,
         mapping_fund_col=mapping_fund_col,
+    )
+
+
+def load_key_values_dataset(key_values_file: Path) -> LoadedKeyValuesInputs:
+    key_values_df = pd.read_excel(key_values_file)
+    columns = [str(c) for c in key_values_df.columns]
+
+    key_issuer_col = _pick_column(
+        columns,
+        KEY_VALUES_ISSUER_COL_CANDIDATES,
+        "LOADER_KEY_VALUES_ISSUER_COL_MISSING",
+        "key-values issuer",
+    )
+    key_value_col = _pick_column(
+        columns,
+        KEY_VALUES_KEY_COL_CANDIDATES,
+        "LOADER_KEY_VALUES_KEY_COL_MISSING",
+        "key-values key",
+    )
+
+    return LoadedKeyValuesInputs(
+        key_values_df=key_values_df,
+        key_issuer_col=key_issuer_col,
+        key_value_col=key_value_col,
     )

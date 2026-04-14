@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -15,6 +16,78 @@ class HasIssuerColumns(Protocol):
 class IssuerAssignResult:
     dataset: pd.DataFrame
     issuer_assigned_count: int
+
+
+@dataclass
+class _AhoAutomaton:
+    transitions: list[dict[str, int]]
+    fail: list[int]
+    outputs: list[list[str]]
+
+
+def _is_better_key(candidate: str, current: str) -> bool:
+    if not current:
+        return True
+    if len(candidate) != len(current):
+        return len(candidate) > len(current)
+    return candidate < current
+
+
+def _build_aho_automaton(keys: list[str]) -> _AhoAutomaton:
+    transitions: list[dict[str, int]] = [{}]
+    fail: list[int] = [0]
+    outputs: list[list[str]] = [[]]
+
+    for key in keys:
+        state = 0
+        for char in key:
+            next_state = transitions[state].get(char)
+            if next_state is None:
+                next_state = len(transitions)
+                transitions[state][char] = next_state
+                transitions.append({})
+                fail.append(0)
+                outputs.append([])
+            state = next_state
+        outputs[state].append(key)
+
+    queue: deque[int] = deque()
+    for _, state in transitions[0].items():
+        queue.append(state)
+        fail[state] = 0
+
+    while queue:
+        state = queue.popleft()
+        for char, next_state in transitions[state].items():
+            queue.append(next_state)
+
+            fallback = fail[state]
+            while fallback and char not in transitions[fallback]:
+                fallback = fail[fallback]
+
+            fail[next_state] = transitions[fallback].get(char, 0)
+            outputs[next_state].extend(outputs[fail[next_state]])
+
+    return _AhoAutomaton(transitions=transitions, fail=fail, outputs=outputs)
+
+
+def _find_best_key(text: str, automaton: _AhoAutomaton) -> str:
+    state = 0
+    best_key = ""
+
+    for char in text:
+        while state and char not in automaton.transitions[state]:
+            state = automaton.fail[state]
+
+        state = automaton.transitions[state].get(char, 0)
+        if not automaton.outputs[state]:
+            continue
+
+        for matched_key in automaton.outputs[state]:
+            if _is_better_key(matched_key, best_key):
+                best_key = matched_key
+
+    return best_key
 
 
 def assign_issuers(dataset: pd.DataFrame, key_values_df: pd.DataFrame, loaded: HasIssuerColumns) -> IssuerAssignResult:
@@ -34,19 +107,14 @@ def assign_issuers(dataset: pd.DataFrame, key_values_df: pd.DataFrame, loaded: H
         if key not in key_to_issuer:
             key_to_issuer[key] = issuer
 
-    ref_series = result["tr_ref_data"].astype("string").str.casefold()
+    automaton = _build_aho_automaton(list(key_to_issuer.keys()))
+    ref_series = result["tr_ref_data"].astype("string").fillna("").str.casefold()
     matched_issuer: list[str] = []
     matched_key: list[str] = []
 
-    sorted_keys = sorted(key_to_issuer.keys(), key=lambda k: (-len(k), k))
     for text in ref_series:
-        issuer_name = ""
-        issuer_key = ""
-        for key in sorted_keys:
-            if key and key in text:
-                issuer_key = key
-                issuer_name = key_to_issuer[key]
-                break
+        issuer_key = _find_best_key(str(text), automaton)
+        issuer_name = key_to_issuer.get(issuer_key, "")
         matched_issuer.append(issuer_name)
         matched_key.append(issuer_key)
 

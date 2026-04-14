@@ -43,6 +43,8 @@ SOURCE_ALIASES = {
         "O\u0304riginal ID",
     ],
     "Asset Desc": ["Asset Desc", "Asset Description"],
+    "Exception ID": ["Exception ID", "exception id", "tr_exception_id"],
+    "Last note Exception": ["Last note Exception", "last note exception", "tr_comment"],
 }
 
 REFERENCE_SOURCE_FIELDS = [
@@ -79,3 +81,24 @@ MAPPING_WSO_SHEET_NAME = "WSO"
 MAPPING_GVA_SHEET_NAME = "GVA"
 MAPPING_WSO_SET_ID_COL_CANDIDATES = ["Set ID WSO", "Set ID", "set_id_wso"]
 MAPPING_GVA_SET_ID_COL_CANDIDATES = ["Set ID GVA", "Set ID", "set_id_gva"]
+
+KEY_VALUES_ISSUER_COL_CANDIDATES = ["issuer_name", "Issuer", "issuer"]
+KEY_VALUES_KEY_COL_CANDIDATES = ["key", "issuer_key", "Key"]
+
+SUMMARY_COLUMNS = [
+    "tr_tier",
+    "tr_tier_explanation",
+    "tr_gva_item_id",
+    "tr_wso_item_id",
+    "tr_fund_name",
+    "tr_issuer_name",
+    "tr_entry_type",
+    "tr_currency",
+    "tr_gva_amount",
+    "tr_wso_amount",
+    "tr_gva_value_date",
+    "tr_wso_value_date",
+    "tr_gva_account",
+    "tr_gva_ex_id",
+    "tr_wso_comm",
+]
