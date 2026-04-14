@@ -88,8 +88,8 @@ def _build_tier_a_summary(pairs: pd.DataFrame, tier: TierDefinition) -> pd.DataF
     summary["tr_wso_item_id"] = _series_or_empty(pairs, "tr_item_id_wso")
     summary["tr_fund_name"] = _series_or_empty(pairs, "tr_fund_name_gva")
     if tier.label == "B":
-        gva_issuer = _series_or_empty(pairs, "tr_issuer_name_gva").astype("string").str.strip()
-        wso_issuer = _series_or_empty(pairs, "tr_issuer_name_wso").astype("string").str.strip()
+        gva_issuer = _series_or_empty(pairs, "tr_issuer_name_gva").astype("string").fillna("").str.strip()
+        wso_issuer = _series_or_empty(pairs, "tr_issuer_name_wso").astype("string").fillna("").str.strip()
         summary["tr_issuer_name"] = gva_issuer.where(gva_issuer.ne(""), wso_issuer)
     else:
         summary["tr_issuer_name"] = _series_or_empty(pairs, "tr_issuer_name_gva")
