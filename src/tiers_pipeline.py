@@ -366,7 +366,7 @@ def _build_tier_plan() -> list[TierDefinition]:
         TierDefinition(label="A", explanation="Exact match. Issuer found", enabled=True, runner=_run_tier_a),
         TierDefinition(label="B", explanation="Exact match. Issuer not found", enabled=True, runner=_run_tier_b),
         TierDefinition(label="C", explanation="Amount diff, low tolerance. Issuer found", enabled=True, runner=_run_tier_c),
-        TierDefinition(label="D", explanation="Date tolerance match", enabled=True, runner=_run_tier_d),
+        TierDefinition(label="D", explanation="Date diff. Issuer found", enabled=True, runner=_run_tier_d),
     ]
 
 
