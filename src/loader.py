@@ -6,6 +6,8 @@ from pathlib import Path
 import pandas as pd
 
 from config import (
+    DATA_INPUT_RELATIVE_DIR,
+    DATA_STATIC_RELATIVE_DIR,
     KEY_VALUES_ISSUER_COL_CANDIDATES,
     KEY_VALUES_KEY_COL_CANDIDATES,
     MAPPING_FUND_COL_CANDIDATES,
@@ -13,6 +15,9 @@ from config import (
     MAPPING_GVA_SHEET_NAME,
     MAPPING_WSO_SET_ID_COL_CANDIDATES,
     MAPPING_WSO_SHEET_NAME,
+    REC_HEADER_MIN_REQUIRED_MATCHES,
+    REC_HEADER_SCAN_MAX_ROWS,
+    REQUIRED_SOURCE_FIELDS,
 )
 from schema_errors import SchemaError
 
@@ -61,7 +66,7 @@ def _find_single_by_tokens(files: list[Path], tokens: tuple[str, ...], code: str
 
 
 def discover_rec_files(project_root: Path) -> list[Path]:
-    input_dir = project_root / "data" / "input"
+    input_dir = project_root / DATA_INPUT_RELATIVE_DIR
     if not input_dir.exists():
         raise SchemaError(
             code="LOADER_INPUT_DIR_MISSING",
@@ -80,7 +85,7 @@ def discover_rec_files(project_root: Path) -> list[Path]:
 
 
 def discover_mapping_file(project_root: Path) -> Path:
-    static_dir = project_root / "data" / "static"
+    static_dir = project_root / DATA_STATIC_RELATIVE_DIR
     if not static_dir.exists():
         raise SchemaError(
             code="LOADER_STATIC_DIR_MISSING",
@@ -100,7 +105,7 @@ def discover_mapping_file(project_root: Path) -> Path:
 
 
 def discover_key_values_file(project_root: Path) -> Path:
-    static_dir = project_root / "data" / "static"
+    static_dir = project_root / DATA_STATIC_RELATIVE_DIR
     if not static_dir.exists():
         raise SchemaError(
             code="LOADER_STATIC_DIR_MISSING",
@@ -137,9 +142,46 @@ def _pick_column(columns: list[str], candidates: list[str], code: str, kind: str
     )
 
 
+def _detect_rec_header_row(path: Path) -> int:
+    preview = pd.read_excel(path, header=None, nrows=REC_HEADER_SCAN_MAX_ROWS)
+    required = {v.casefold() for v in REQUIRED_SOURCE_FIELDS.values()}
+
+    best_row = -1
+    best_score = -1
+
+    for row_idx, row in preview.iterrows():
+        normalized = {
+            str(value).strip().casefold()
+            for value in row.tolist()
+            if pd.notna(value) and str(value).strip()
+        }
+        score = len(required.intersection(normalized))
+        if score > best_score:
+            best_score = score
+            best_row = int(row_idx)
+
+    if best_row < 0 or best_score < REC_HEADER_MIN_REQUIRED_MATCHES:
+        raise SchemaError(
+            code="LOADER_REC_HEADER_NOT_FOUND",
+            message=f"Could not detect header row in rec file: {path.name}",
+            hint=(
+                "Ensure the file contains a header row with required columns "
+                f"(matches={best_score}, required>={REC_HEADER_MIN_REQUIRED_MATCHES})."
+            ),
+            file_path=str(path),
+        )
+
+    return best_row
+
+
+def _read_rec_dataset(path: Path) -> pd.DataFrame:
+    header_row = _detect_rec_header_row(path)
+    return pd.read_excel(path, header=header_row)
+
+
 def load_rec_datasets(rec_files: list[Path]) -> LoadedRecInputs:
     return LoadedRecInputs(
-        rec_frames=[pd.read_excel(path, skiprows=1) for path in rec_files],
+        rec_frames=[_read_rec_dataset(path) for path in rec_files],
         rec_file_names=[path.name for path in rec_files],
     )
 

@@ -76,6 +76,15 @@ SHEET_GVA_WSO = "gva_wso"
 SHEET_FUND_NOT_FOUND = "fund_not_found"
 SHEET_SUMMARY = "gva_wso_summary"
 
+# Relative paths from project root
+DATA_INPUT_RELATIVE_DIR = "data/input"
+DATA_STATIC_RELATIVE_DIR = "data/static"
+DATA_OUTPUT_RELATIVE_DIR = "data/output"
+
+# Rec header auto-detection settings
+REC_HEADER_SCAN_MAX_ROWS = 6
+REC_HEADER_MIN_REQUIRED_MATCHES = 5
+
 MAPPING_FUND_COL_CANDIDATES = ["Fund Name", "fund_name", "Fund"]
 MAPPING_WSO_SHEET_NAME = "WSO"
 MAPPING_GVA_SHEET_NAME = "GVA"

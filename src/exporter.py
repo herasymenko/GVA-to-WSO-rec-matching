@@ -6,7 +6,13 @@ import shutil
 
 import pandas as pd
 
-from config import OUTPUT_FILE_NAME, SHEET_FUND_NOT_FOUND, SHEET_GVA_WSO, SHEET_SUMMARY
+from config import (
+    DATA_OUTPUT_RELATIVE_DIR,
+    OUTPUT_FILE_NAME,
+    SHEET_FUND_NOT_FOUND,
+    SHEET_GVA_WSO,
+    SHEET_SUMMARY,
+)
 
 
 @dataclass
@@ -29,7 +35,7 @@ def export_workbook(
     fund_not_found: pd.DataFrame,
     summary: pd.DataFrame,
 ) -> ExportResult:
-    output_dir = project_root / "data" / "output"
+    output_dir = project_root / DATA_OUTPUT_RELATIVE_DIR
     clear_output_dir(output_dir)
 
     output_path = output_dir / OUTPUT_FILE_NAME
