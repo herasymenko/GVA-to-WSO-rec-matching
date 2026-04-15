@@ -70,8 +70,7 @@ def _normalize_wso_comments(summary: pd.DataFrame) -> pd.DataFrame:
 
     comment_text = cleaned.where(cleaned.ne(""), TR_WSO_COMM_DEFAULT_COMMENT)
 
-    issuer_col = "tr_issuer_aasigned" if "tr_issuer_aasigned" in result.columns else "tr_issuer_name"
-    issuer_text = result[issuer_col].astype("string").fillna("").str.strip() if issuer_col in result.columns else pd.Series("", index=result.index, dtype="string")
+    issuer_text = result["tr_issuer_name"].astype("string").fillna("").str.strip()
 
     base = code_series + " " + TR_WSO_COMM_FORMAT_PREFIX + comment_text
     with_issuer = base + " (" + issuer_text + ")"
