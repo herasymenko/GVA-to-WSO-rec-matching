@@ -111,3 +111,17 @@ TIER_C_LINEAR_END_AMOUNT_CENTS = 10000
 
 # Tier D configuration
 TIER_D_MAX_DATE_DIFF_DAYS = 10
+
+# WSO comment post-processing:
+# 1) strip legacy code prefix like "MOCS ...;" at the beginning
+# 2) assign code by substring rules (first matched code wins)
+TR_WSO_COMM_STRIP_PREFIX_REGEX = r"^\s*MOCS[^;]*;\s*"
+
+TR_WSO_COMM_CODE_RULES: list[tuple[str, list[str]]] = [
+    ("[FW-Transfer]", ["Direct Entry Transfer", "Pending Transfer"]),
+    ("[FW-Others]", ["Custody Posted - BNYM did not"]),
+    ("[MO]", []),
+]
+
+TR_WSO_COMM_FORMAT_PREFIX = "Valid break on WSO side (*date*) - "
+TR_WSO_COMM_DEFAULT_COMMENT = "No comment"

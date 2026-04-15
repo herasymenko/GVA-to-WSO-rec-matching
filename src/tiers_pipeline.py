@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Callable
 
 import pandas as pd
@@ -12,6 +13,10 @@ from config import (
     TIER_C_MAX_TOLERANCE_CENTS,
     TIER_C_MIN_TOLERANCE_CENTS,
     TIER_D_MAX_DATE_DIFF_DAYS,
+    TR_WSO_COMM_CODE_RULES,
+    TR_WSO_COMM_DEFAULT_COMMENT,
+    TR_WSO_COMM_FORMAT_PREFIX,
+    TR_WSO_COMM_STRIP_PREFIX_REGEX,
 )
 
 
@@ -39,6 +44,39 @@ def _series_or_empty(df: pd.DataFrame, col: str) -> pd.Series:
 
 def _empty_summary() -> pd.DataFrame:
     return pd.DataFrame(columns=SUMMARY_COLUMNS)
+
+
+def _normalize_wso_comments(summary: pd.DataFrame) -> pd.DataFrame:
+    if summary.empty or "tr_wso_comm" not in summary.columns:
+        return summary
+
+    result = summary.copy(deep=False)
+    raw = result["tr_wso_comm"].astype("string").fillna("")
+    cleaned = raw.str.replace(TR_WSO_COMM_STRIP_PREFIX_REGEX, "", regex=True).str.strip()
+
+    default_code = "[MO]"
+    code_series = pd.Series(default_code, index=result.index, dtype="string")
+
+    for code, substrings in TR_WSO_COMM_CODE_RULES:
+        if code == default_code or not substrings:
+            continue
+
+        mask = pd.Series(False, index=result.index)
+        for substring in substrings:
+            pattern = re.escape(substring)
+            mask = mask | cleaned.str.contains(pattern, case=False, na=False, regex=True)
+
+        code_series = code_series.where(~(mask & code_series.eq(default_code)), code)
+
+    comment_text = cleaned.where(cleaned.ne(""), TR_WSO_COMM_DEFAULT_COMMENT)
+
+    issuer_col = "tr_issuer_aasigned" if "tr_issuer_aasigned" in result.columns else "tr_issuer_name"
+    issuer_text = result[issuer_col].astype("string").fillna("").str.strip() if issuer_col in result.columns else pd.Series("", index=result.index, dtype="string")
+
+    base = code_series + " " + TR_WSO_COMM_FORMAT_PREFIX + comment_text
+    with_issuer = base + " (" + issuer_text + ")"
+    result["tr_wso_comm"] = with_issuer.where(issuer_text.ne(""), base)
+    return result
 
 
 def _build_exact_key(df: pd.DataFrame, include_issuer: bool) -> pd.Series:
@@ -386,6 +424,7 @@ def run_tiers_pipeline(dataset: pd.DataFrame) -> TiersResult:
             summary_frames.append(summary_rows)
 
     summary = pd.concat(summary_frames, ignore_index=True) if summary_frames else _empty_summary()
+    summary = _normalize_wso_comments(summary)
 
     return TiersResult(
         dataset=result,
