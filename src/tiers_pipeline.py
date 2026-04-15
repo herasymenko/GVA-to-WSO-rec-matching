@@ -187,10 +187,97 @@ def _run_tier_b(dataset: pd.DataFrame, tier: TierDefinition) -> tuple[pd.DataFra
     return result, summary, len(summary)
 
 
+def _tier_c_tolerance(max_amount_cents: pd.Series) -> pd.Series:
+    # Piecewise tolerance in cents:
+    # [0, 100): 5
+    # [100, 10000): linear from 5 to 100
+    # [10000, +inf): 100
+    max_amount = pd.to_numeric(max_amount_cents, errors="coerce").fillna(0).astype("int64")
+    tolerance = pd.Series(100, index=max_amount.index, dtype="int64")
+
+    lt_100 = max_amount < 100
+    mid = (max_amount >= 100) & (max_amount < 10000)
+
+    tolerance.loc[lt_100] = 5
+    tolerance.loc[mid] = (5 + ((max_amount.loc[mid] - 100) * 95) // 9900).astype("int64")
+    return tolerance
+
+
+def _run_tier_c(dataset: pd.DataFrame, tier: TierDefinition) -> tuple[pd.DataFrame, pd.DataFrame, int]:
+    result = dataset.copy(deep=False)
+
+    active_mask = (
+        (~result["tr_found"]) &
+        result["tr_rec_name"].isin(["GVA", "WSO"]) &
+        result["tr_currency"].astype("string").str.strip().ne("") &
+        result["tr_fund_name"].astype("string").str.strip().ne("") &
+        result["tr_entry_type"].astype("string").str.strip().ne("")
+    )
+    active = result.loc[active_mask].copy()
+    if active.empty:
+        return result, _empty_summary(), 0
+
+    issuer_norm = active["tr_issuer_name"].astype("string").fillna("").str.strip()
+    active["_tier_c_key"] = (
+        active["tr_fund_name"].astype("string").fillna("") + "|" +
+        issuer_norm + "|" +
+        active["tr_side"].astype("string").fillna("") + "|" +
+        active["tr_currency"].astype("string").fillna("") + "|" +
+        active["tr_entry_type"].astype("string").fillna("") + "|" +
+        active["tr_value_date"].astype("string").fillna("")
+    )
+
+    gva = active[active["tr_rec_name"] == "GVA"]
+    wso = active[active["tr_rec_name"] == "WSO"]
+    if gva.empty or wso.empty:
+        return result, _empty_summary(), 0
+
+    left = gva.sort_index().copy()
+    right = wso.sort_index().copy()
+
+    left["_pair_seq"] = left.groupby("_tier_c_key", sort=False).cumcount()
+    right["_pair_seq"] = right.groupby("_tier_c_key", sort=False).cumcount()
+    left["_row_index_gva"] = left.index
+    right["_row_index_wso"] = right.index
+
+    pairs = left.merge(
+        right,
+        how="inner",
+        on=["_tier_c_key", "_pair_seq"],
+        suffixes=("_gva", "_wso"),
+        sort=False,
+    )
+    if pairs.empty:
+        return result, _empty_summary(), 0
+
+    gva_amount = pd.to_numeric(pairs["tr_amount_cents_gva"], errors="coerce")
+    wso_amount = pd.to_numeric(pairs["tr_amount_cents_wso"], errors="coerce")
+    diff_amount = (gva_amount - wso_amount).abs()
+    max_amount = pd.concat([gva_amount.abs(), wso_amount.abs()], axis=1).max(axis=1)
+    tolerance = _tier_c_tolerance(max_amount)
+
+    within_tolerance = diff_amount.le(tolerance)
+    pairs = pairs.loc[within_tolerance]
+    if pairs.empty:
+        return result, _empty_summary(), 0
+
+    pairs = pairs.sort_values(
+        by=["_tier_c_key", "_pair_seq", "_row_index_gva", "_row_index_wso"],
+        kind="stable",
+    )
+
+    matched_idx = pd.Index(pairs["_row_index_gva"]).append(pd.Index(pairs["_row_index_wso"]))
+    result.loc[matched_idx, "tr_found"] = True
+
+    summary = _build_tier_a_summary(pairs, tier)
+    return result, summary, len(summary)
+
+
 def _build_tier_plan() -> list[TierDefinition]:
     return [
-        TierDefinition(label="A", explanation="Exact Match", enabled=True, runner=_run_tier_a),
-        TierDefinition(label="B", explanation="exact match (except issuer)", enabled=True, runner=_run_tier_b),
+        TierDefinition(label="A", explanation="Exact match. Issuer found", enabled=True, runner=_run_tier_a),
+        TierDefinition(label="B", explanation="Exact match. Issuer not found", enabled=True, runner=_run_tier_b),
+        TierDefinition(label="C", explanation="Amount diff, low tolerance. Issuer found", enabled=True, runner=_run_tier_c),
     ]
 
 

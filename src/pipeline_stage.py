@@ -31,6 +31,7 @@ class PipelineMetrics:
     summary_rows: int
     tier_a_matches: int
     tier_b_matches: int
+    tier_c_matches: int
     load_ms: int
     normalize_ms: int
     mapping_ms: int
@@ -88,6 +89,7 @@ def run_pipeline_stage(project_root: Path) -> int:
         summary_rows=len(summary_sheet),
         tier_a_matches=int(tiers_result.tier_counts.get("A", 0)),
         tier_b_matches=int(tiers_result.tier_counts.get("B", 0)),
+        tier_c_matches=int(tiers_result.tier_counts.get("C", 0)),
         load_ms=load_ms,
         normalize_ms=normalize_ms,
         mapping_ms=mapping_ms,
@@ -103,7 +105,7 @@ def run_pipeline_stage(project_root: Path) -> int:
         f"rows_total={metrics.rows_total} rows_gva={metrics.rows_gva} rows_wso={metrics.rows_wso} "
         f"fund_not_found_rows={metrics.fund_not_found_rows} issuer_assigned_rows={metrics.issuer_assigned_rows} "
         f"summary_rows={metrics.summary_rows} tier_a_matches={metrics.tier_a_matches} "
-        f"tier_b_matches={metrics.tier_b_matches} "
+        f"tier_b_matches={metrics.tier_b_matches} tier_c_matches={metrics.tier_c_matches} "
         f"elapsed_ms={metrics.elapsed_ms}"
     )
     print(
