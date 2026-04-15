@@ -102,3 +102,12 @@ SUMMARY_COLUMNS = [
     "tr_gva_ex_id",
     "tr_wso_comm",
 ]
+
+# Tier C tolerance configuration (in cents)
+TIER_C_MIN_TOLERANCE_CENTS = 5
+TIER_C_MAX_TOLERANCE_CENTS = 100
+TIER_C_LINEAR_START_AMOUNT_CENTS = 100
+TIER_C_LINEAR_END_AMOUNT_CENTS = 10000
+
+# Tier D configuration
+TIER_D_MAX_DATE_DIFF_DAYS = 10

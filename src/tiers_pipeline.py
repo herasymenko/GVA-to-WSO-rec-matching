@@ -5,7 +5,14 @@ from typing import Callable
 
 import pandas as pd
 
-from config import SUMMARY_COLUMNS
+from config import (
+    SUMMARY_COLUMNS,
+    TIER_C_LINEAR_END_AMOUNT_CENTS,
+    TIER_C_LINEAR_START_AMOUNT_CENTS,
+    TIER_C_MAX_TOLERANCE_CENTS,
+    TIER_C_MIN_TOLERANCE_CENTS,
+    TIER_D_MAX_DATE_DIFF_DAYS,
+)
 
 
 @dataclass
@@ -188,18 +195,20 @@ def _run_tier_b(dataset: pd.DataFrame, tier: TierDefinition) -> tuple[pd.DataFra
 
 
 def _tier_c_tolerance(max_amount_cents: pd.Series) -> pd.Series:
-    # Piecewise tolerance in cents:
-    # [0, 100): 5
-    # [100, 10000): linear from 5 to 100
-    # [10000, +inf): 100
+    # Piecewise tolerance in cents, configured via config.py constants.
     max_amount = pd.to_numeric(max_amount_cents, errors="coerce").fillna(0).astype("int64")
-    tolerance = pd.Series(100, index=max_amount.index, dtype="int64")
+    tolerance = pd.Series(TIER_C_MAX_TOLERANCE_CENTS, index=max_amount.index, dtype="int64")
 
-    lt_100 = max_amount < 100
-    mid = (max_amount >= 100) & (max_amount < 10000)
+    lt_start = max_amount < TIER_C_LINEAR_START_AMOUNT_CENTS
+    mid = (max_amount >= TIER_C_LINEAR_START_AMOUNT_CENTS) & (max_amount < TIER_C_LINEAR_END_AMOUNT_CENTS)
 
-    tolerance.loc[lt_100] = 5
-    tolerance.loc[mid] = (5 + ((max_amount.loc[mid] - 100) * 95) // 9900).astype("int64")
+    tolerance.loc[lt_start] = TIER_C_MIN_TOLERANCE_CENTS
+    span_amount = max(1, TIER_C_LINEAR_END_AMOUNT_CENTS - TIER_C_LINEAR_START_AMOUNT_CENTS)
+    span_tolerance = TIER_C_MAX_TOLERANCE_CENTS - TIER_C_MIN_TOLERANCE_CENTS
+    tolerance.loc[mid] = (
+        TIER_C_MIN_TOLERANCE_CENTS +
+        ((max_amount.loc[mid] - TIER_C_LINEAR_START_AMOUNT_CENTS) * span_tolerance) // span_amount
+    ).astype("int64")
     return tolerance
 
 
@@ -273,11 +282,91 @@ def _run_tier_c(dataset: pd.DataFrame, tier: TierDefinition) -> tuple[pd.DataFra
     return result, summary, len(summary)
 
 
+def _run_tier_d(dataset: pd.DataFrame, tier: TierDefinition) -> tuple[pd.DataFrame, pd.DataFrame, int]:
+    result = dataset.copy(deep=False)
+
+    active_mask = (
+        (~result["tr_found"]) &
+        result["tr_rec_name"].isin(["GVA", "WSO"]) &
+        result["tr_fund_name"].astype("string").str.strip().ne("") &
+        result["tr_issuer_name"].astype("string").str.strip().ne("") &
+        result["tr_entry_type"].astype("string").str.strip().ne("") &
+        result["tr_currency"].astype("string").str.strip().ne("")
+    )
+    active = result.loc[active_mask].copy()
+    if active.empty:
+        return result, _empty_summary(), 0
+
+    amount_norm = pd.to_numeric(active["tr_amount_cents"], errors="coerce")
+    active = active.loc[amount_norm.notna()].copy()
+    if active.empty:
+        return result, _empty_summary(), 0
+    active["_amount_norm"] = amount_norm.loc[active.index].astype("int64")
+
+    active["_tier_d_key"] = (
+        active["tr_fund_name"].astype("string").fillna("") + "|" +
+        active["tr_issuer_name"].astype("string").fillna("").str.strip() + "|" +
+        active["_amount_norm"].astype("string") + "|" +
+        active["tr_entry_type"].astype("string").fillna("") + "|" +
+        active["tr_currency"].astype("string").fillna("")
+    )
+
+    gva = active[active["tr_rec_name"] == "GVA"]
+    wso = active[active["tr_rec_name"] == "WSO"]
+    if gva.empty or wso.empty:
+        return result, _empty_summary(), 0
+
+    left = gva.sort_index().copy()
+    right = wso.sort_index().copy()
+    left["_row_index_gva"] = left.index
+    right["_row_index_wso"] = right.index
+    left["_value_date_dt"] = pd.to_datetime(left["tr_value_date"], errors="coerce")
+    right["_value_date_dt"] = pd.to_datetime(right["tr_value_date"], errors="coerce")
+
+    left = left[left["_value_date_dt"].notna()]
+    right = right[right["_value_date_dt"].notna()]
+    if left.empty or right.empty:
+        return result, _empty_summary(), 0
+
+    pairs = left.merge(
+        right,
+        how="inner",
+        on=["_tier_d_key"],
+        suffixes=("_gva", "_wso"),
+        sort=False,
+    )
+    if pairs.empty:
+        return result, _empty_summary(), 0
+
+    date_diff_days = (pairs["_value_date_dt_gva"] - pairs["_value_date_dt_wso"]).abs().dt.days
+    pairs = pairs.loc[date_diff_days.le(TIER_D_MAX_DATE_DIFF_DAYS)].copy()
+    if pairs.empty:
+        return result, _empty_summary(), 0
+    pairs["_date_diff_days"] = date_diff_days.loc[pairs.index]
+
+    # Greedy one-to-one matching: closest date first, then stable by source row index.
+    pairs = pairs.sort_values(
+        by=["_tier_d_key", "_date_diff_days", "_row_index_gva", "_row_index_wso"],
+        kind="stable",
+    )
+    pairs = pairs.loc[~pairs["_row_index_gva"].duplicated(keep="first")]
+    pairs = pairs.loc[~pairs["_row_index_wso"].duplicated(keep="first")]
+    if pairs.empty:
+        return result, _empty_summary(), 0
+
+    matched_idx = pd.Index(pairs["_row_index_gva"]).append(pd.Index(pairs["_row_index_wso"]))
+    result.loc[matched_idx, "tr_found"] = True
+
+    summary = _build_tier_a_summary(pairs, tier)
+    return result, summary, len(summary)
+
+
 def _build_tier_plan() -> list[TierDefinition]:
     return [
         TierDefinition(label="A", explanation="Exact match. Issuer found", enabled=True, runner=_run_tier_a),
         TierDefinition(label="B", explanation="Exact match. Issuer not found", enabled=True, runner=_run_tier_b),
         TierDefinition(label="C", explanation="Amount diff, low tolerance. Issuer found", enabled=True, runner=_run_tier_c),
+        TierDefinition(label="D", explanation="Date tolerance match", enabled=True, runner=_run_tier_d),
     ]
 
 
